@@ -539,16 +539,6 @@ class DLTrainer:
         return d
 
     def _adjust_learning_rate_lstman4(self, progress, optimizer):
-        #if settings.WARMUP and progress< 5:
-        #    warmup_total_iters = self.num_batches_per_epoch * 5 
-        #    min_lr = self.base_lr / self.nworkers
-        #    lr_interval = (self.base_lr - min_lr) / warmup_total_iters
-        #    self.lr = min_lr + lr_interval * self.train_iter
-        #    #warmuplr = [0.01, 0.03, 0.05, 0.07, 0.09, 0.1]
-        #    #self.lr = warmuplr[progress]
-        #    for param_group in optimizer.param_groups:
-        #        param_group['lr'] = self.lr
-        #    return 
         if self.lstman4_lr_epoch_tag != progress:
             self.lstman4_lr_epoch_tag = progress 
             for param_group in optimizer.param_groups:
@@ -594,116 +584,25 @@ class DLTrainer:
             second = 60
             third = 80
         if progress < first: #40:  30 for ResNet-50, 40 for ResNet-20
-            #interval_iters = first * self.num_batches_per_epoch+2
-            #lr_interval = (self.base_lr-self.base_lr*0.1)/interval_iters
-            #lr = self.base_lr - (self.train_iter % interval_iters) * lr_interval
             lr = self.base_lr
         elif progress < second: #80: 70 for ResNet-50, 80 for ResNet-20
-            #interval_iters = (second-first) * self.num_batches_per_epoch+2
-            #lr_interval = (self.base_lr*0.1-self.base_lr*0.01)/interval_iters
-            #lr = self.base_lr *0.1 - (self.train_iter % interval_iters) * lr_interval
             lr = self.base_lr * 0.1
         elif progress < third:
-            #interval_iters = (third-second) * self.num_batches_per_epoch+2
-            #lr_interval = (self.base_lr*0.01-self.base_lr*0.001)/interval_iters
-            #lr = self.base_lr *0.01 - (self.train_iter % interval_iters) * lr_interval
             lr = self.base_lr * 0.01
         else:
             lr = self.base_lr *0.001
-        #if self.train_iter % self.num_batches_per_epoch != 0:
-        #    lr = lr - lr/(self.train_iter % self.num_batches_per_epoch+1)
         self.lr = lr
-        if settings.ZHU:
-            k = (self.train_iter+1)#*self.nworkers
-            lr = 1.0/(np.sqrt(k) * np.log(k))
-            max_lr = self.base_lr
-            if lr > max_lr:
-                lr = max_lr
-            self.lr = lr
         for param_group in optimizer.param_groups:
             param_group['lr'] = self.lr
         return self.lr 
 
-    def _adjust_learning_rate_vgg16(self, progress, optimizer):
-        if progress > 0 and progress % 25 == 0:
-            self.lr = self.base_lr / (2**(progress/25))
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = self.lr
-        return self.lr
-
-    def _adjust_learning_rate_customized(self, progress, optimizer):
-        def _get_increased_lrs(base_lr, min_epoch, max_epoch):
-            npe = self.num_batches_per_epoch
-            total_iters = (max_epoch-min_epoch)*npe
-            min_lr = base_lr/total_iters
-            lr_interval = (base_lr - min_lr) /total_iters 
-            lr = min_lr + lr_interval * (self.train_iter-min_epoch*npe)
-            return lr
-        def _get_decreased_lrs(base_lr, target_lr, min_epoch, max_epoch):
-            npe = self.num_batches_per_epoch
-            total_iters = (max_epoch-min_epoch)*npe
-            lr_interval = (base_lr-target_lr)/total_iters
-            lr = base_lr - lr_interval * (self.train_iter-min_epoch*npe)
-            return lr
-
-        warmup = 10
-        if settings.WARMUP and progress < warmup:
-            self.lr = _get_increased_lrs(self.base_lr, 0, warmup)
-            #self.lr = self.base_lr
-        elif progress < 15:
-            self.lr = self.base_lr
-        #elif progress < 40:
-        #    self.lr = _get_decreased_lrs(self.base_lr*0.1, self.base_lr*0.01, 20, 40)
-        #elif progress < 27: 
-        #    self.lr = self.base_lr*0.05#_get_increased_lrs(self.base_lr, 19, 30) 
-        elif progress < 25:
-            self.lr = self.base_lr*0.1 
-        elif progress < 35:
-            self.lr = self.base_lr*0.01
-        else:
-            self.lr = self.base_lr*0.001
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = self.lr
-        return self.lr
-
-    def _adjust_learning_rate_cosine(self, progress, optimizer):
-        def _get_increased_lrs(base_lr, min_epoch, max_epoch):
-            npe = self.num_batches_per_epoch
-            total_iters = (max_epoch-min_epoch)*npe
-            min_lr = base_lr/total_iters
-            lr_interval = (base_lr - min_lr) /total_iters 
-            lr = min_lr + lr_interval * (self.train_iter-min_epoch*npe)
-            return lr
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = self.lr
-        warmup = 14
-        max_epochs = 40
-        if settings.WARMUP and progress < warmup:
-            self.lr = _get_increased_lrs(self.base_lr, 0, warmup)
-        elif progress < max_epochs:
-            e = progress - warmup 
-            es = max_epochs - warmup 
-            lr = 0.5 * (1 + np.cos(np.pi * e / es)) * self.base_lr
-            self.lr = lr
-        return self.lr
 
     def adjust_learning_rate(self, progress, optimizer):
-        #if self.dnn == 'vgg16':
-        #    return self._adjust_learning_rate_vgg16(progress, optimizer)
         if self.dnn == 'lstman4':
            return self._adjust_learning_rate_lstman4(self.train_iter//self.num_batches_per_epoch, optimizer)
         elif self.dnn == 'lstm':
             return self._adjust_learning_rate_lstmptb(progress, optimizer)
         return self._adjust_learning_rate_general(progress, optimizer)
-        #return self._adjust_learning_rate_customized(progress, optimizer)
-        #return self._adjust_learning_rate_cosine(progress, optimizer)
-
-    def print_weight_gradient_ratio(self):
-        # Tensorboard
-        if self.rank == 0 and self.writer is not None:
-            for name, param in self.net.named_parameters():
-                self.writer.add_histogram(name, param.clone().cpu().data.numpy(), self.train_epoch)
-        return
 
     def finish(self):
         if self.writer is not None:
